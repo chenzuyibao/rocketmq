@@ -27,6 +27,7 @@ import org.apache.rocketmq.remoting.common.RemotingHelper;
 public class TestProducer {
     public static void main(String[] args) throws MQClientException, InterruptedException {
         DefaultMQProducer producer = new DefaultMQProducer("ProducerGroupName");
+        System.out.println("测试git");
         producer.start();
 
         for (int i = 0; i < 1; i++)
