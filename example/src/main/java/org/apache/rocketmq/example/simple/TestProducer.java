@@ -30,6 +30,7 @@ public class TestProducer {
         System.out.println("测试git");
         producer.start();
         System.out.println("测试git");
+        System.out.println("测试git");
         for (int i = 0; i < 1; i++)
             try {
                 {
