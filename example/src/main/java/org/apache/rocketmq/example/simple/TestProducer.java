@@ -29,7 +29,7 @@ public class TestProducer {
         DefaultMQProducer producer = new DefaultMQProducer("ProducerGroupName");
         System.out.println("测试git");
         producer.start();
-
+        System.out.println("测试git");
         for (int i = 0; i < 1; i++)
             try {
                 {
