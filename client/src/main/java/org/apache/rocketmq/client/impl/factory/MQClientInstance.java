@@ -85,23 +85,39 @@ import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 public class MQClientInstance {
     private final static long LOCK_TIMEOUT_MILLIS = 3000;
     private final InternalLogger log = ClientLogger.getLog();
+    // 在MQClientManager中new MQCLientInstance的时候，传入DefaultMQProducer，因为DefaultMQProducer继承了ClientConfig
     private final ClientConfig clientConfig;
+    // new 的时候传入，由MQClientManager生成
     private final int instanceIndex;
+    // new的时候传入，由clientConfig.buildMQClientId生成，形式为：ip@instanceName
     private final String clientId;
     private final long bootTimestamp = System.currentTimeMillis();
+    // 每个group对应的MQProducerInner
+    // 在producer启动的时候注册到这儿
+    // 在每次发送message的时候从nameServer获取topicRouteData并更新每个producer对应的信息
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
+    // 每个group对应的MQConsumerInner
+    // consumer start的时候注册到这儿
+    // 在每次发送message的时候从nameServer获取topicRouteData并更新每个consumer对应的信息
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
+    // 每个group对应的adminExtInner，在NameServer 启动的时候会注册DefaultMQAdminExt
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
     private final NettyClientConfig nettyClientConfig;
+    // 用来client远程通信，使用netty
     private final MQClientAPIImpl mQClientAPIImpl;
     private final MQAdminImpl mQAdminImpl;
+    // topic对应的TopicRouteTable
+    // 在每次发送message的时候从nameServer获取topicRouteData并更新对应的信息
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
     private final Lock lockNamesrv = new ReentrantLock();
     private final Lock lockHeartbeat = new ReentrantLock();
+    // 所有broker的地址
+    // 在每次发送message的时候从nameServer获取topicRouteData并更新对应的信息
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
         new ConcurrentHashMap<String, HashMap<Long, String>>();
     private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable =
         new ConcurrentHashMap<String, HashMap<String, Integer>>();
+    // 定时任务线程池，包括：fetchNameServerAddr，updateTopicRouteInfoFromNameServer等
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
@@ -262,6 +278,7 @@ public class MQClientInstance {
                 @Override
                 public void run() {
                     try {
+                    	// 获取nameServer的地址
                         MQClientInstance.this.mQClientAPIImpl.fetchNameServerAddr();
                     } catch (Exception e) {
                         log.error("ScheduledTask fetchNameServerAddr exception", e);
@@ -275,6 +292,7 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                	// 更新topicRouteData
                     MQClientInstance.this.updateTopicRouteInfoFromNameServer();
                 } catch (Exception e) {
                     log.error("ScheduledTask updateTopicRouteInfoFromNameServer exception", e);
@@ -287,7 +305,9 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                	// 清理掉线的broker
                     MQClientInstance.this.cleanOfflineBroker();
+                    // 给broker发送心跳
                     MQClientInstance.this.sendHeartbeatToAllBrokerWithLock();
                 } catch (Exception e) {
                     log.error("ScheduledTask sendHeartbeatToAllBroker exception", e);
@@ -300,6 +320,7 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                	// 保存consumerOffset
                     MQClientInstance.this.persistAllConsumerOffset();
                 } catch (Exception e) {
                     log.error("ScheduledTask persistAllConsumerOffset exception", e);
@@ -312,6 +333,8 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                	// 根据processQueueTable的大小决定是否需要增加或者减少threadPool的大小
+                    // 目前尚未实现具体的增加或者减少的逻辑
                     MQClientInstance.this.adjustThreadPool();
                 } catch (Exception e) {
                     log.error("ScheduledTask adjustThreadPool exception", e);
