@@ -87,7 +87,7 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                 return this.deleteKVConfig(ctx, request);
             case RequestCode.QUERY_DATA_VERSION:
                 return queryBrokerTopicConfig(ctx, request);
-            case RequestCode.REGISTER_BROKER:
+            case RequestCode.REGISTER_BROKER:// 注册borker信息
                 Version brokerVersion = MQVersion.value2Version(request.getVersion());
                 if (brokerVersion.ordinal() >= MQVersion.Version.V3_0_11.ordinal()) {
                     return this.registerBrokerWithFilterServer(ctx, request);
@@ -95,9 +95,9 @@ public class DefaultRequestProcessor implements NettyRequestProcessor {
                     return this.registerBroker(ctx, request);
                 }
             case RequestCode.UNREGISTER_BROKER:
-                return this.unregisterBroker(ctx, request);
+                return this.unregisterBroker(ctx, request);// 取消注册broker
             case RequestCode.GET_ROUTEINTO_BY_TOPIC:
-                return this.getRouteInfoByTopic(ctx, request);
+                return this.getRouteInfoByTopic(ctx, request);// 根据topic获取路由信息，在producer发送消息和consumer在pull消息的时候的时候会从nameServer 中获取
             case RequestCode.GET_BROKER_CLUSTER_INFO:
                 return this.getBrokerClusterInfo(ctx, request);
             case RequestCode.WIPE_WRITE_PERM_OF_BROKER:
