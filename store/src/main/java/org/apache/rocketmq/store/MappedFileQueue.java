@@ -36,9 +36,9 @@ public class MappedFileQueue {
     private static final int DELETE_FILES_BATCH_MAX = 10;
 
     private final String storePath;
-
+    //mappedFile的大小，默认1024*1024*1024 1G
     private final int mappedFileSize;
-
+    //维护MappedFile的集合
     private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
 
     private final AllocateMappedFileService allocateMappedFileService;
@@ -192,23 +192,25 @@ public class MappedFileQueue {
     }
 
     public MappedFile getLastMappedFile(final long startOffset, boolean needCreate) {
+    	// 创建文件开始offset。-1时，不创建
         long createOffset = -1;
+        // 获取集合中的最后一个MappedFile
         MappedFile mappedFileLast = getLastMappedFile();
 
         if (mappedFileLast == null) {
-            createOffset = startOffset - (startOffset % this.mappedFileSize);
+            createOffset = startOffset - (startOffset % this.mappedFileSize); 
         }
-
+        //mappedFile已满,获取新的MappedFile所需创建的offset位置：最后一个MappedFile的offset位置+1G
         if (mappedFileLast != null && mappedFileLast.isFull()) {
             createOffset = mappedFileLast.getFileFromOffset() + this.mappedFileSize;
         }
-
+        //是否新建mappedFile
         if (createOffset != -1 && needCreate) {
             String nextFilePath = this.storePath + File.separator + UtilAll.offset2FileName(createOffset);
             String nextNextFilePath = this.storePath + File.separator
                 + UtilAll.offset2FileName(createOffset + this.mappedFileSize);
             MappedFile mappedFile = null;
-
+            //分配MappedFile服务
             if (this.allocateMappedFileService != null) {
                 mappedFile = this.allocateMappedFileService.putRequestAndReturnMappedFile(nextFilePath,
                     nextNextFilePath, this.mappedFileSize);
@@ -219,7 +221,7 @@ public class MappedFileQueue {
                     log.error("create mappedFile exception", e);
                 }
             }
-
+            //设置 MappedFile是否是第一个创建的文件。该标识用于 ConsumeQueue 对应的 MappedFile
             if (mappedFile != null) {
                 if (this.mappedFiles.isEmpty()) {
                     mappedFile.setFirstCreateInQueue(true);

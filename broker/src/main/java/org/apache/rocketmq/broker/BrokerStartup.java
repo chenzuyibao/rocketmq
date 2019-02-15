@@ -88,8 +88,9 @@ public class BrokerStartup {
     }
 
     public static BrokerController createBrokerController(String[] args) {
+    	//设置rocketMQ版本信息
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
-
+        //校验远程通信的发送缓存和接收缓存是否为空, 如果为空则设置默认值大小为131072
         if (null == System.getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_SNDBUF_SIZE)) {
             NettySystemConfig.socketSndbufSize = 131072;
         }
@@ -100,6 +101,7 @@ public class BrokerStartup {
 
         try {
             //PackageConflictDetect.detectFastjson();
+        	//构造命令行解析Options, 这个过程已经设置了h(help)、n(namesrvAddr)两个参数, 后面还会配置c(configFile), p(printConfigItem), m(printImportantConfig)；parseCmdLine()方法会对mqbroker启动命令进行解析
             Options options = ServerUtil.buildCommandlineOptions(new Options());
             commandLine = ServerUtil.parseCmdLine("mqbroker", args, buildCommandlineOptions(options),
                 new PosixParser());
@@ -120,7 +122,9 @@ public class BrokerStartup {
                 int ratio = messageStoreConfig.getAccessMessageInMemoryMaxRatio() - 10;
                 messageStoreConfig.setAccessMessageInMemoryMaxRatio(ratio);
             }
-
+            /*如果启动命令行参数包含 -c 参数，会读取配置到Propertis中, 让后通过MixAll.properties2Object(), 
+            将读取的配置文件信息存入brokerConfig, nettyServerConfig, nettyClientConfig, messageStoreConfig对应的实体类中，
+            最后将配置文件路径信息保存到BrokerPathConfigHelper中brokerConfigPath变量中*/
             if (commandLine.hasOption('c')) {
                 String file = commandLine.getOptionValue('c');
                 if (file != null) {
@@ -139,14 +143,14 @@ public class BrokerStartup {
                     in.close();
                 }
             }
-
+            //将其它命令行参数读取到Properties中，并将信息保存到brokerConfig对象中
             MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), brokerConfig);
 
             if (null == brokerConfig.getRocketmqHome()) {
                 System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation", MixAll.ROCKETMQ_HOME_ENV);
                 System.exit(-2);
             }
-
+            //从brokerConfig获取namesrvAddr信息，并将地址信息转为SocketAddress对象
             String namesrvAddr = brokerConfig.getNamesrvAddr();
             if (null != namesrvAddr) {
                 try {
@@ -161,7 +165,7 @@ public class BrokerStartup {
                     System.exit(-3);
                 }
             }
-
+            //设置当前broker的角色(master,slave), 如果是同步/异步MASTER信息，brokerId=0 ;如果是SLAVE信息，brokerId > 0 ; 如果brokerId < 0 , 会抛出异常
             switch (messageStoreConfig.getBrokerRole()) {
                 case ASYNC_MASTER:
                 case SYNC_MASTER:
@@ -177,8 +181,9 @@ public class BrokerStartup {
                 default:
                     break;
             }
-
+            
             messageStoreConfig.setHaListenPort(nettyServerConfig.getListenPort() + 1);
+            //导入指定路径的logback_broker.xml文件
             LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
             JoranConfigurator configurator = new JoranConfigurator();
             configurator.setContext(lc);
@@ -200,27 +205,28 @@ public class BrokerStartup {
                 MixAll.printObjectProperties(console, messageStoreConfig, true);
                 System.exit(0);
             }
-
+            //将brokerConfig，nettyServerConfig，nettyClientConfig，messageStoreConfig对象中的属性打印
             log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
             MixAll.printObjectProperties(log, brokerConfig);
             MixAll.printObjectProperties(log, nettyServerConfig);
             MixAll.printObjectProperties(log, nettyClientConfig);
             MixAll.printObjectProperties(log, messageStoreConfig);
-
+            //创建BrokerController
             final BrokerController controller = new BrokerController(
                 brokerConfig,
                 nettyServerConfig,
                 nettyClientConfig,
                 messageStoreConfig);
             // remember all configs to prevent discard
+            //将propertis中保存的信息保存到brokerController的Configuration属性中
             controller.getConfiguration().registerConfig(properties);
-
+            //调用controller中的initialize进行controller的初始化
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();
                 System.exit(-3);
             }
-
+            //通过Runtime.getRuntime().addShutdownHook()设置，在jvm关闭之前需要处理的一些事情，系统会处理内存清理、对象销毁等一系列操作, 这里是对brokerController进行关闭操作。
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 private volatile boolean hasShutdown = false;
                 private AtomicInteger shutdownTimes = new AtomicInteger(0);

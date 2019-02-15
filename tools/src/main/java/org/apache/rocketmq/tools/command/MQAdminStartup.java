@@ -80,6 +80,7 @@ import org.apache.rocketmq.tools.command.topic.UpdateTopicSubCommand;
 import org.slf4j.LoggerFactory;
 
 public class MQAdminStartup {
+	//存放命令实现类的容器
     protected static List<SubCommand> subCommandList = new ArrayList<SubCommand>();
 
     public static void main(String[] args) {
@@ -90,7 +91,7 @@ public class MQAdminStartup {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
 
         //PackageConflictDetect.detectFastjson();
-
+        //初始化各个命令实现类，并加入容器：List<SubCommand> subCommandList
         initCommand();
 
         try {
@@ -100,6 +101,7 @@ public class MQAdminStartup {
                     printHelp();
                     break;
                 case 2:
+                	//help命令处理
                     if (args[0].equals("help")) {
                         SubCommand cmd = findSubCommand(args[1]);
                         if (cmd != null) {
@@ -115,23 +117,26 @@ public class MQAdminStartup {
                     }
                 case 1:
                 default:
+                	//从容器中获取到该命令的实现类
                     SubCommand cmd = findSubCommand(args[0]);
                     if (cmd != null) {
+                    	//获取输入参数的数组
                         String[] subargs = parseSubArgs(args);
-
+                        //初始化namesrv地址的option选项
                         Options options = ServerUtil.buildCommandlineOptions(new Options());
+                        //生产commandLine，包含各个输入参数和对应的值
                         final CommandLine commandLine =
                             ServerUtil.parseCmdLine("mqadmin " + cmd.commandName(), subargs, cmd.buildCommandlineOptions(options),
                                 new PosixParser());
                         if (null == commandLine) {
                             return;
                         }
-
+                        //将namesrv的地址设为系统变量
                         if (commandLine.hasOption('n')) {
                             String namesrvAddr = commandLine.getOptionValue('n');
                             System.setProperty(MixAll.NAMESRV_ADDR_PROPERTY, namesrvAddr);
                         }
-
+                        //执行命令
                         cmd.execute(commandLine, options, getAclRPCHook());
                     } else {
                         System.out.printf("The sub command %s not exist.%n", args[0]);

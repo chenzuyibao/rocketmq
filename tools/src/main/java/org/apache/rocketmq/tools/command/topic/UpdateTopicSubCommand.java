@@ -87,7 +87,7 @@ public class UpdateTopicSubCommand implements SubCommand {
         RPCHook rpcHook) throws SubCommandException {
         DefaultMQAdminExt defaultMQAdminExt = new DefaultMQAdminExt(rpcHook);
         defaultMQAdminExt.setInstanceName(Long.toString(System.currentTimeMillis()));
-
+        //生成topicConfig
         try {
             TopicConfig topicConfig = new TopicConfig();
             topicConfig.setReadQueueNums(8);
@@ -127,13 +127,14 @@ public class UpdateTopicSubCommand implements SubCommand {
                 isOrder = Boolean.parseBoolean(commandLine.getOptionValue('o').trim());
             }
             topicConfig.setOrder(isOrder);
-
+            //是broker创建
             if (commandLine.hasOption('b')) {
+            	//获取broker的 addr=ip:port
                 String addr = commandLine.getOptionValue('b').trim();
 
                 defaultMQAdminExt.start();
                 defaultMQAdminExt.createAndUpdateTopicConfig(addr, topicConfig);
-
+                //是否顺序
                 if (isOrder) {
                     String brokerName = CommandUtil.fetchBrokerNameByAddr(defaultMQAdminExt, addr);
                     String orderConf = brokerName + ":" + topicConfig.getWriteQueueNums();
@@ -144,8 +145,8 @@ public class UpdateTopicSubCommand implements SubCommand {
                 System.out.printf("create topic to %s success.%n", addr);
                 System.out.printf("%s", topicConfig);
                 return;
-
-            } else if (commandLine.hasOption('c')) {
+                
+            } else if (commandLine.hasOption('c')) {//是cluster创建
                 String clusterName = commandLine.getOptionValue('c').trim();
 
                 defaultMQAdminExt.start();

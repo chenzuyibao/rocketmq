@@ -201,21 +201,27 @@ public class MappedFile extends ReferenceResource {
     public AppendMessageResult appendMessagesInner(final MessageExt messageExt, final AppendMessageCallback cb) {
         assert messageExt != null;
         assert cb != null;
-
+        //获取当前写入的位置
         int currentPos = this.wrotePosition.get();
-
+        //若当前写入位置小于文件大小，则写入
         if (currentPos < this.fileSize) {
+        	//获取需要写入的字节缓冲区
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
+            //设置写入position
             byteBuffer.position(currentPos);
             AppendMessageResult result = null;
+            //判断消息类型，是否为批量写入，并执行写入
             if (messageExt instanceof MessageExtBrokerInner) {
+            	//传入参数，MappedFile起始offset,剩余空白位置=fileSize-currentPos,
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBrokerInner) messageExt);
             } else if (messageExt instanceof MessageExtBatch) {
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBatch) messageExt);
             } else {
                 return new AppendMessageResult(AppendMessageStatus.UNKNOWN_ERROR);
             }
+            //更新写入位置
             this.wrotePosition.addAndGet(result.getWroteBytes());
+            //更新存储
             this.storeTimestamp = result.getStoreTimestamp();
             return result;
         }

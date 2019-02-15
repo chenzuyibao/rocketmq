@@ -314,6 +314,7 @@ public class TopicConfigManager extends ConfigManager {
     }
 
     public void updateTopicConfig(final TopicConfig topicConfig) {
+    	//更新缓存中的集合
         TopicConfig old = this.topicConfigTable.put(topicConfig.getTopicName(), topicConfig);
         if (old != null) {
             log.info("update topic config, old:[{}] new:[{}]", old, topicConfig);
@@ -322,7 +323,7 @@ public class TopicConfigManager extends ConfigManager {
         }
 
         this.dataVersion.nextVersion();
-
+        //持久化到本地
         this.persist();
     }
 
