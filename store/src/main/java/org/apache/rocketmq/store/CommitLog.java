@@ -566,7 +566,7 @@ public class CommitLog {
         //获取写入映射文件
         MappedFile unlockMappedFile = null;
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile();
-        //获取写入锁
+        //获取写入锁,默认为自旋锁，可配置为互斥锁
         putMessageLock.lock(); //spin or ReentrantLock ,depending on store config
         try {
             long beginLockTimestamp = this.defaultMessageStore.getSystemClock().now();
@@ -586,7 +586,7 @@ public class CommitLog {
                 beginTimeInLock = 0;
                 return new PutMessageResult(PutMessageStatus.CREATE_MAPEDFILE_FAILED, null);
             }
-            //插入消息到MappedFile
+            //插入消息到MappedFile的字节缓冲区
             result = mappedFile.appendMessage(msg, this.appendMessageCallback);
             switch (result.getStatus()) {
                 case PUT_OK:
@@ -645,11 +645,15 @@ public class CommitLog {
 
     public void handleDiskFlush(AppendMessageResult result, PutMessageResult putMessageResult, MessageExt messageExt) {
         // Synchronization flush
+    	// 同步刷盘
         if (FlushDiskType.SYNC_FLUSH == this.defaultMessageStore.getMessageStoreConfig().getFlushDiskType()) {
+        	// 同步刷盘线程
             final GroupCommitService service = (GroupCommitService) this.flushCommitLogService;
+            // 默认为true
             if (messageExt.isWaitStoreMsgOK()) {
                 GroupCommitRequest request = new GroupCommitRequest(result.getWroteOffset() + result.getWroteBytes());
                 service.putRequest(request);
+                //刷盘
                 boolean flushOK = request.waitForFlush(this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout());
                 if (!flushOK) {
                     log.error("do groupcommit, wait for flush failed, topic: " + messageExt.getTopic() + " tags: " + messageExt.getTags()
@@ -661,7 +665,9 @@ public class CommitLog {
             }
         }
         // Asynchronous flush
+        // 异步刷盘
         else {
+        	//是否开启内存字节缓冲区，开启不同的异步刷盘线程
             if (!this.defaultMessageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
                 flushCommitLogService.wakeup();
             } else {
@@ -956,7 +962,11 @@ public class CommitLog {
     }
 
     class FlushRealTimeService extends FlushCommitLogService {
+    	//最后flush时间戳
         private long lastFlushTimestamp = 0;
+        /**
+         * 满足print次数时，调用{@link #printFlushProgress()}
+         */
         private long printTimes = 0;
 
         public void run() {
@@ -964,11 +974,11 @@ public class CommitLog {
 
             while (!this.isStopped()) {
                 boolean flushCommitLogTimed = CommitLog.this.defaultMessageStore.getMessageStoreConfig().isFlushCommitLogTimed();
-
+                //获取刷盘间隔时间
                 int interval = CommitLog.this.defaultMessageStore.getMessageStoreConfig().getFlushIntervalCommitLog();
                 int flushPhysicQueueLeastPages = CommitLog.this.defaultMessageStore.getMessageStoreConfig().getFlushCommitLogLeastPages();
 
-                int flushPhysicQueueThoroughInterval =
+                int flushPhysicQueueThoroughInterval =	
                     CommitLog.this.defaultMessageStore.getMessageStoreConfig().getFlushCommitLogThoroughInterval();
 
                 boolean printFlushProgress = false;
@@ -991,7 +1001,7 @@ public class CommitLog {
                     if (printFlushProgress) {
                         this.printFlushProgress();
                     }
-
+                    //flush commitLog
                     long begin = System.currentTimeMillis();
                     CommitLog.this.mappedFileQueue.flush(flushPhysicQueueLeastPages);
                     long storeTimestamp = CommitLog.this.mappedFileQueue.getStoreTimestamp();
@@ -1069,30 +1079,35 @@ public class CommitLog {
      * GroupCommit Service
      */
     class GroupCommitService extends FlushCommitLogService {
+    	//写入请求队列
         private volatile List<GroupCommitRequest> requestsWrite = new ArrayList<GroupCommitRequest>();
+        //读取请求队列
         private volatile List<GroupCommitRequest> requestsRead = new ArrayList<GroupCommitRequest>();
-
+        //添加写入请求
         public synchronized void putRequest(final GroupCommitRequest request) {
+        	//添加
             synchronized (this.requestsWrite) {
                 this.requestsWrite.add(request);
             }
+            
             if (hasNotified.compareAndSet(false, true)) {
                 waitPoint.countDown(); // notify
             }
         }
-
+        //切换读写队列
         private void swapRequests() {
             List<GroupCommitRequest> tmp = this.requestsWrite;
             this.requestsWrite = this.requestsRead;
             this.requestsRead = tmp;
         }
-
+        //提交
         private void doCommit() {
             synchronized (this.requestsRead) {
                 if (!this.requestsRead.isEmpty()) {
                     for (GroupCommitRequest req : this.requestsRead) {
                         // There may be a message in the next file, so a maximum of
                         // two times the flush
+                    	// 有可能一条消息在MappedFile末尾插入不下，会插入下个MappedFile，故循环两次
                         boolean flushOK = false;
                         for (int i = 0; i < 2 && !flushOK; i++) {
                             flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
@@ -1101,7 +1116,7 @@ public class CommitLog {
                                 CommitLog.this.mappedFileQueue.flush(0);
                             }
                         }
-
+                        //唤醒等待请求
                         req.wakeupCustomer(flushOK);
                     }
 
@@ -1109,7 +1124,7 @@ public class CommitLog {
                     if (storeTimestamp > 0) {
                         CommitLog.this.defaultMessageStore.getStoreCheckpoint().setPhysicMsgTimestamp(storeTimestamp);
                     }
-
+                    //清理读取队列
                     this.requestsRead.clear();
                 } else {
                     // Because of individual messages is set to not sync flush, it
@@ -1118,13 +1133,14 @@ public class CommitLog {
                 }
             }
         }
-
+        //线程执行入口
         public void run() {
             CommitLog.log.info(this.getServiceName() + " service started");
 
             while (!this.isStopped()) {
                 try {
                     this.waitForRunning(10);
+                    //执行提交
                     this.doCommit();
                 } catch (Exception e) {
                     CommitLog.log.warn(this.getServiceName() + " service has exception. ", e);
