@@ -16,8 +16,14 @@
  */
 package org.apache.rocketmq.broker;
 
-import ch.qos.logback.classic.LoggerContext;
-import ch.qos.logback.classic.joran.JoranConfigurator;
+import static org.apache.rocketmq.remoting.netty.TlsSystemConfig.TLS_ENABLE;
+
+import java.io.BufferedInputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
@@ -40,36 +46,33 @@ import org.apache.rocketmq.store.config.BrokerRole;
 import org.apache.rocketmq.store.config.MessageStoreConfig;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import static org.apache.rocketmq.remoting.netty.TlsSystemConfig.TLS_ENABLE;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.joran.JoranConfigurator;
 
 public class BrokerStartup {
-    public static Properties properties = null;
-    public static CommandLine commandLine = null;
-    public static String configFile = null;
+    public static Properties     properties  = null;
+    public static CommandLine    commandLine = null;
+    public static String         configFile  = null;
     public static InternalLogger log;
-
+    
     public static void main(String[] args) {
+        //启动
         start(createBrokerController(args));
     }
-
+    
     public static BrokerController start(BrokerController controller) {
         try {
-
+            
             controller.start();
-
+            
             String tip = "The broker[" + controller.getBrokerConfig().getBrokerName() + ", "
-                + controller.getBrokerAddr() + "] boot success. serializeType=" + RemotingCommand.getSerializeTypeConfigInThisServer();
-
+                + controller.getBrokerAddr() + "] boot success. serializeType="
+                + RemotingCommand.getSerializeTypeConfigInThisServer();
+            
             if (null != controller.getBrokerConfig().getNamesrvAddr()) {
                 tip += " and name server is " + controller.getBrokerConfig().getNamesrvAddr();
             }
-
+            
             log.info(tip);
             System.out.printf("%s%n", tip);
             return controller;
@@ -77,47 +80,50 @@ public class BrokerStartup {
             e.printStackTrace();
             System.exit(-1);
         }
-
+        
         return null;
     }
-
+    
     public static void shutdown(final BrokerController controller) {
         if (null != controller) {
             controller.shutdown();
         }
     }
-
+    
     public static BrokerController createBrokerController(String[] args) {
-    	//设置rocketMQ版本信息
-        System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
+        //设置rocketMQ版本信息
+        System.setProperty(RemotingCommand.REMOTING_VERSION_KEY,
+            Integer.toString(MQVersion.CURRENT_VERSION));
         //校验远程通信的发送缓存和接收缓存是否为空, 如果为空则设置默认值大小为131072
-        if (null == System.getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_SNDBUF_SIZE)) {
+        if (null == System
+            .getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_SNDBUF_SIZE)) {
             NettySystemConfig.socketSndbufSize = 131072;
         }
-
-        if (null == System.getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_RCVBUF_SIZE)) {
+        
+        if (null == System
+            .getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_RCVBUF_SIZE)) {
             NettySystemConfig.socketRcvbufSize = 131072;
         }
-
+        
         try {
             //PackageConflictDetect.detectFastjson();
-        	//构造命令行解析Options, 这个过程已经设置了h(help)、n(namesrvAddr)两个参数, 后面还会配置c(configFile), p(printConfigItem), m(printImportantConfig)；parseCmdLine()方法会对mqbroker启动命令进行解析
+            //构造命令行解析Options, 这个过程已经设置了h(help)、n(namesrvAddr)两个参数, 后面还会配置c(configFile), p(printConfigItem), m(printImportantConfig)；parseCmdLine()方法会对mqbroker启动命令进行解析
             Options options = ServerUtil.buildCommandlineOptions(new Options());
-            commandLine = ServerUtil.parseCmdLine("mqbroker", args, buildCommandlineOptions(options),
-                new PosixParser());
+            commandLine = ServerUtil.parseCmdLine("mqbroker", args,
+                buildCommandlineOptions(options), new PosixParser());
             if (null == commandLine) {
                 System.exit(-1);
             }
-
+            
             final BrokerConfig brokerConfig = new BrokerConfig();
             final NettyServerConfig nettyServerConfig = new NettyServerConfig();
             final NettyClientConfig nettyClientConfig = new NettyClientConfig();
-
+            
             nettyClientConfig.setUseTLS(Boolean.parseBoolean(System.getProperty(TLS_ENABLE,
                 String.valueOf(TlsSystemConfig.tlsMode == TlsMode.ENFORCING))));
             nettyServerConfig.setListenPort(10911);
             final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
-
+            
             if (BrokerRole.SLAVE == messageStoreConfig.getBrokerRole()) {
                 int ratio = messageStoreConfig.getAccessMessageInMemoryMaxRatio() - 10;
                 messageStoreConfig.setAccessMessageInMemoryMaxRatio(ratio);
@@ -132,22 +138,24 @@ public class BrokerStartup {
                     InputStream in = new BufferedInputStream(new FileInputStream(file));
                     properties = new Properties();
                     properties.load(in);
-
+                    
                     properties2SystemEnv(properties);
                     MixAll.properties2Object(properties, brokerConfig);
                     MixAll.properties2Object(properties, nettyServerConfig);
                     MixAll.properties2Object(properties, nettyClientConfig);
                     MixAll.properties2Object(properties, messageStoreConfig);
-
+                    
                     BrokerPathConfigHelper.setBrokerConfigPath(file);
                     in.close();
                 }
             }
             //将其它命令行参数读取到Properties中，并将信息保存到brokerConfig对象中
             MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), brokerConfig);
-
+            
             if (null == brokerConfig.getRocketmqHome()) {
-                System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation", MixAll.ROCKETMQ_HOME_ENV);
+                System.out.printf(
+                    "Please set the %s variable in your environment to match the location of the RocketMQ installation",
+                    MixAll.ROCKETMQ_HOME_ENV);
                 System.exit(-2);
             }
             //从brokerConfig获取namesrvAddr信息，并将地址信息转为SocketAddress对象
@@ -176,7 +184,7 @@ public class BrokerStartup {
                         System.out.printf("Slave's brokerId must be > 0");
                         System.exit(-3);
                     }
-
+                    
                     break;
                 default:
                     break;
@@ -189,16 +197,18 @@ public class BrokerStartup {
             configurator.setContext(lc);
             lc.reset();
             configurator.doConfigure(brokerConfig.getRocketmqHome() + "/conf/logback_broker.xml");
-
+            
             if (commandLine.hasOption('p')) {
-                InternalLogger console = InternalLoggerFactory.getLogger(LoggerName.BROKER_CONSOLE_NAME);
+                InternalLogger console = InternalLoggerFactory
+                    .getLogger(LoggerName.BROKER_CONSOLE_NAME);
                 MixAll.printObjectProperties(console, brokerConfig);
                 MixAll.printObjectProperties(console, nettyServerConfig);
                 MixAll.printObjectProperties(console, nettyClientConfig);
                 MixAll.printObjectProperties(console, messageStoreConfig);
                 System.exit(0);
             } else if (commandLine.hasOption('m')) {
-                InternalLogger console = InternalLoggerFactory.getLogger(LoggerName.BROKER_CONSOLE_NAME);
+                InternalLogger console = InternalLoggerFactory
+                    .getLogger(LoggerName.BROKER_CONSOLE_NAME);
                 MixAll.printObjectProperties(console, brokerConfig, true);
                 MixAll.printObjectProperties(console, nettyServerConfig, true);
                 MixAll.printObjectProperties(console, nettyClientConfig, true);
@@ -212,11 +222,8 @@ public class BrokerStartup {
             MixAll.printObjectProperties(log, nettyClientConfig);
             MixAll.printObjectProperties(log, messageStoreConfig);
             //创建BrokerController
-            final BrokerController controller = new BrokerController(
-                brokerConfig,
-                nettyServerConfig,
-                nettyClientConfig,
-                messageStoreConfig);
+            final BrokerController controller = new BrokerController(brokerConfig,
+                nettyServerConfig, nettyClientConfig, messageStoreConfig);
             // remember all configs to prevent discard
             //将propertis中保存的信息保存到brokerController的Configuration属性中
             controller.getConfiguration().registerConfig(properties);
@@ -228,56 +235,60 @@ public class BrokerStartup {
             }
             //通过Runtime.getRuntime().addShutdownHook()设置，在jvm关闭之前需要处理的一些事情，系统会处理内存清理、对象销毁等一系列操作, 这里是对brokerController进行关闭操作。
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-                private volatile boolean hasShutdown = false;
-                private AtomicInteger shutdownTimes = new AtomicInteger(0);
-
+                private volatile boolean hasShutdown   = false;
+                private AtomicInteger    shutdownTimes = new AtomicInteger(0);
+                
                 @Override
                 public void run() {
                     synchronized (this) {
-                        log.info("Shutdown hook was invoked, {}", this.shutdownTimes.incrementAndGet());
+                        log.info("Shutdown hook was invoked, {}",
+                            this.shutdownTimes.incrementAndGet());
                         if (!this.hasShutdown) {
                             this.hasShutdown = true;
                             long beginTime = System.currentTimeMillis();
                             controller.shutdown();
                             long consumingTimeTotal = System.currentTimeMillis() - beginTime;
-                            log.info("Shutdown hook over, consuming total time(ms): {}", consumingTimeTotal);
+                            log.info("Shutdown hook over, consuming total time(ms): {}",
+                                consumingTimeTotal);
                         }
                     }
                 }
             }, "ShutdownHook"));
-
+            
             return controller;
         } catch (Throwable e) {
             e.printStackTrace();
             System.exit(-1);
         }
-
+        
         return null;
     }
-
+    
     private static void properties2SystemEnv(Properties properties) {
         if (properties == null) {
             return;
         }
-        String rmqAddressServerDomain = properties.getProperty("rmqAddressServerDomain", MixAll.WS_DOMAIN_NAME);
-        String rmqAddressServerSubGroup = properties.getProperty("rmqAddressServerSubGroup", MixAll.WS_DOMAIN_SUBGROUP);
+        String rmqAddressServerDomain = properties.getProperty("rmqAddressServerDomain",
+            MixAll.WS_DOMAIN_NAME);
+        String rmqAddressServerSubGroup = properties.getProperty("rmqAddressServerSubGroup",
+            MixAll.WS_DOMAIN_SUBGROUP);
         System.setProperty("rocketmq.namesrv.domain", rmqAddressServerDomain);
         System.setProperty("rocketmq.namesrv.domain.subgroup", rmqAddressServerSubGroup);
     }
-
+    
     private static Options buildCommandlineOptions(final Options options) {
         Option opt = new Option("c", "configFile", true, "Broker config properties file");
         opt.setRequired(false);
         options.addOption(opt);
-
+        
         opt = new Option("p", "printConfigItem", false, "Print all config item");
         opt.setRequired(false);
         options.addOption(opt);
-
+        
         opt = new Option("m", "printImportantConfig", false, "Print important config item");
         opt.setRequired(false);
         options.addOption(opt);
-
+        
         return options;
     }
 }
