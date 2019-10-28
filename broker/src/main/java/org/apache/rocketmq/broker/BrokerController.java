@@ -567,7 +567,7 @@ public class BrokerController {
         this.fastRemotingServer.registerProcessor(RequestCode.QUERY_MESSAGE, queryProcessor, this.queryMessageExecutor);
         this.fastRemotingServer.registerProcessor(RequestCode.VIEW_MESSAGE_BY_ID, queryProcessor, this.queryMessageExecutor);
 
-        /**
+        /*
          * ClientManageProcessor
          */
         ClientManageProcessor clientProcessor = new ClientManageProcessor(this);
