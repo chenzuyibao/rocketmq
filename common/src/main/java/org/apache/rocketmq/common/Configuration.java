@@ -20,7 +20,6 @@ package org.apache.rocketmq.common;
 
 import org.apache.rocketmq.logging.InternalLogger;
 
-
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -43,6 +42,7 @@ public class Configuration {
     private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     /**
      * All properties include configs in object and extend properties.
+     * 所有属性都包括对象的配置和扩展属性
      */
     private Properties allConfigs = new Properties();
 
@@ -132,7 +132,7 @@ public class Configuration {
                 // check
                 this.storePathField = object.getClass().getDeclaredField(fieldName);
                 assert this.storePathField != null
-                    && !Modifier.isStatic(this.storePathField.getModifiers());
+                        && !Modifier.isStatic(this.storePathField.getModifiers());
                 this.storePathField.setAccessible(true);
             } catch (NoSuchFieldException e) {
                 throw new RuntimeException(e);
