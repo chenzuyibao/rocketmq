@@ -129,7 +129,7 @@ public class NamesrvStartup {
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
         // remember all configs to prevent discard
-        // 将读取的配置导入，防止丢失
+        // 将读取的配置导入注册到 NamesrvController
         controller.getConfiguration().registerConfig(properties);
 
         return controller;

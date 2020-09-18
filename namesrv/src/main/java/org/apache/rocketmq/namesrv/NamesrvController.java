@@ -82,7 +82,7 @@ public class NamesrvController {
         this.kvConfigManager.load();
         //2.	初始化NettyRemotingServer
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
-        //3.    初始化nettyRomote线程池，默认8个，该线程池中队列为LinkedBlockingQueue，为无界队列
+        //3.    初始化 nettyRemote 线程池，默认8个，该线程池中队列为LinkedBlockingQueue，为无界队列
         this.remotingExecutor =
                 Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
         //4.	注册requestProcessor，默认为DefaultRequestProcessor，用来处理netty接收到的信息
