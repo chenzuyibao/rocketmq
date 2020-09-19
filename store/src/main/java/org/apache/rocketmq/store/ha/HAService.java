@@ -16,22 +16,6 @@
  */
 package org.apache.rocketmq.store.ha;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.rocketmq.common.ServiceThread;
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
@@ -40,6 +24,19 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.store.CommitLog;
 import org.apache.rocketmq.store.DefaultMessageStore;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.*;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
 public class HAService {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -47,21 +44,26 @@ public class HAService {
 
     private final List<HAConnection> connectionList = new LinkedList<>();
 
+    // 接收SocketChannel连接
     private final AcceptSocketService acceptSocketService;
 
     private final DefaultMessageStore defaultMessageStore;
 
+    // WriteSocketService等待CommitLog追加
     private final WaitNotifyObject waitNotifyObject = new WaitNotifyObject();
+
+    // 所有Slave中的最大同步偏移量
     private final AtomicLong push2SlaveMaxOffset = new AtomicLong(0);
 
     private final GroupTransferService groupTransferService;
 
+    // Slave使用
     private final HAClient haClient;
 
     public HAService(final DefaultMessageStore defaultMessageStore) throws IOException {
         this.defaultMessageStore = defaultMessageStore;
         this.acceptSocketService =
-            new AcceptSocketService(defaultMessageStore.getMessageStoreConfig().getHaListenPort());
+                new AcceptSocketService(defaultMessageStore.getMessageStoreConfig().getHaListenPort());
         this.groupTransferService = new GroupTransferService();
         this.haClient = new HAClient();
     }
@@ -79,9 +81,9 @@ public class HAService {
     public boolean isSlaveOK(final long masterPutWhere) {
         boolean result = this.connectionCount.get() > 0;
         result =
-            result
-                && ((masterPutWhere - this.push2SlaveMaxOffset.get()) < this.defaultMessageStore
-                .getMessageStoreConfig().getHaSlaveFallbehindMax());
+                result
+                        && ((masterPutWhere - this.push2SlaveMaxOffset.get()) < this.defaultMessageStore
+                        .getMessageStoreConfig().getHaSlaveFallbehindMax());
         return result;
     }
 
@@ -106,9 +108,12 @@ public class HAService {
     // }
 
     public void start() throws Exception {
+        // 启动Master端的ServerSocketChannel等待连接
         this.acceptSocketService.beginAccept();
+        // 启动线程循环监听 Selector 连接事件
         this.acceptSocketService.start();
         this.groupTransferService.start();
+        // 该客户端是Slave用于向Master发送偏移量并接收Master同步的CommitLog
         this.haClient.start();
     }
 
@@ -207,14 +212,16 @@ public class HAService {
 
                     if (selected != null) {
                         for (SelectionKey k : selected) {
+                            // 有新的Socket连接
                             if ((k.readyOps() & SelectionKey.OP_ACCEPT) != 0) {
                                 SocketChannel sc = ((ServerSocketChannel) k.channel()).accept();
 
                                 if (sc != null) {
                                     HAService.log.info("HAService receive new connection, "
-                                        + sc.socket().getRemoteSocketAddress());
+                                            + sc.socket().getRemoteSocketAddress());
 
                                     try {
+                                        // 创建HAConnection
                                         HAConnection conn = new HAConnection(HAService.this, sc);
                                         conn.start();
                                         HAService.this.addConnection(conn);
@@ -323,17 +330,29 @@ public class HAService {
         }
     }
 
+    /**
+     * 发送Slave Offset
+     * 接收Master同步的CommitLog
+     */
     class HAClient extends ServiceThread {
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024 * 4;
         private final AtomicReference<String> masterAddress = new AtomicReference<>();
+        // 汇报slave最大偏移量的reportOffset的byte buffer
         private final ByteBuffer reportOffset = ByteBuffer.allocate(8);
+        // 连接的SocketChannel
         private SocketChannel socketChannel;
+        // I/O 多路复用器
         private Selector selector;
+        // 记录上次写的时间
         private long lastWriteTimestamp = System.currentTimeMillis();
 
+        // Slave CommitLog当前汇报的最大偏移量
         private long currentReportedOffset = 0;
+        // 指向了当前byteBufferReader中首个未被解析的CommitLog数据包
         private int dispatchPostion = 0;
+        // 接收CommitLog数据包的byteBuffer
         private ByteBuffer byteBufferRead = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
+        // byteBufferRead的备份
         private ByteBuffer byteBufferBackup = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
 
         public HAClient() throws IOException {
@@ -350,30 +369,35 @@ public class HAService {
 
         private boolean isTimeToReportOffset() {
             long interval =
-                HAService.this.defaultMessageStore.getSystemClock().now() - this.lastWriteTimestamp;
+                    HAService.this.defaultMessageStore.getSystemClock().now() - this.lastWriteTimestamp;
             boolean needHeart = interval > HAService.this.defaultMessageStore.getMessageStoreConfig()
-                .getHaSendHeartbeatInterval();
+                    .getHaSendHeartbeatInterval();
 
             return needHeart;
         }
 
+        // 上报SlaveMaxOffset信息
         private boolean reportSlaveMaxOffset(final long maxOffset) {
+            // clear方法
             this.reportOffset.position(0);
             this.reportOffset.limit(8);
             this.reportOffset.putLong(maxOffset);
+            // flip方法
             this.reportOffset.position(0);
             this.reportOffset.limit(8);
 
             for (int i = 0; i < 3 && this.reportOffset.hasRemaining(); i++) {
                 try {
+                    // 发送SlaveMaxOffset
                     this.socketChannel.write(this.reportOffset);
                 } catch (IOException e) {
                     log.error(this.getServiceName()
-                        + "reportSlaveMaxOffset this.socketChannel.write exception", e);
+                            + "reportSlaveMaxOffset this.socketChannel.write exception", e);
                     return false;
                 }
             }
 
+            // 若超过3次还未能将8字节发送到MasterBroker，说明存在问题，返回false
             return !this.reportOffset.hasRemaining();
         }
 
@@ -406,14 +430,17 @@ public class HAService {
                 try {
                     int readSize = this.socketChannel.read(this.byteBufferRead);
                     if (readSize > 0) {
+                        // 这边是个问题，处理读事件确更新了上次写的时间
                         lastWriteTimestamp = HAService.this.defaultMessageStore.getSystemClock().now();
                         readSizeZeroTimes = 0;
+                        // 调用dispatchReadRequest()分发读请求
                         boolean result = this.dispatchReadRequest();
                         if (!result) {
                             log.error("HAClient, dispatchReadRequest error");
                             return false;
                         }
                     } else if (readSize == 0) {
+                        // 若连续3次都读取为0，则退出
                         if (++readSizeZeroTimes >= 3) {
                             break;
                         }
@@ -430,6 +457,7 @@ public class HAService {
             return true;
         }
 
+        // 分发处理读请求，进行TCP拆包读取信息
         private boolean dispatchReadRequest() {
             final int msgHeaderSize = 8 + 4; // phyoffset + size
             int readSocketPos = this.byteBufferRead.position();
@@ -445,7 +473,7 @@ public class HAService {
                     if (slavePhyOffset != 0) {
                         if (slavePhyOffset != masterPhyOffset) {
                             log.error("master pushed offset not equal the max phy offset in slave, SLAVE: "
-                                + slavePhyOffset + " MASTER: " + masterPhyOffset);
+                                    + slavePhyOffset + " MASTER: " + masterPhyOffset);
                             return false;
                         }
                     }
@@ -506,9 +534,10 @@ public class HAService {
                         }
                     }
                 }
-
+                // currentReportedOffset为当前CommitLog的最大物理偏移量
                 this.currentReportedOffset = HAService.this.defaultMessageStore.getMaxPhyOffset();
 
+                // 更新最新的写入时间戳
                 this.lastWriteTimestamp = System.currentTimeMillis();
             }
 
@@ -548,8 +577,10 @@ public class HAService {
 
             while (!this.isStopped()) {
                 try {
+                    // 连接Master
                     if (this.connectMaster()) {
 
+                        // 判断是否需要汇报心跳
                         if (this.isTimeToReportOffset()) {
                             boolean result = this.reportSlaveMaxOffset(this.currentReportedOffset);
                             if (!result) {
@@ -557,24 +588,27 @@ public class HAService {
                             }
                         }
 
+                        // I/O复用，检查是否有读事件
                         this.selector.select(1000);
 
+                        // 处理读事件
                         boolean ok = this.processReadEvent();
                         if (!ok) {
                             this.closeMaster();
                         }
 
+                        // 处理完读事件后，若SlaveMaxOffset更新，需要再次发送新的SlaveMaxOffset
                         if (!reportSlaveMaxOffsetPlus()) {
                             continue;
                         }
 
                         long interval =
-                            HAService.this.getDefaultMessageStore().getSystemClock().now()
-                                - this.lastWriteTimestamp;
+                                HAService.this.getDefaultMessageStore().getSystemClock().now()
+                                        - this.lastWriteTimestamp;
                         if (interval > HAService.this.getDefaultMessageStore().getMessageStoreConfig()
-                            .getHaHousekeepingInterval()) {
+                                .getHaHousekeepingInterval()) {
                             log.warn("HAClient, housekeeping, found this connection[" + this.masterAddress
-                                + "] expired, " + interval);
+                                    + "] expired, " + interval);
                             this.closeMaster();
                             log.warn("HAClient, master not response some time, so close connection");
                         }

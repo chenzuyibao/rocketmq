@@ -93,7 +93,7 @@ public class BrokerStartup {
         //设置rocketMQ版本信息
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY,
                 Integer.toString(MQVersion.CURRENT_VERSION));
-        //校验远程通信的发送缓存和接收缓存是否为空, 如果为空则设置默认值大小为131072
+        //校验远程通信的发送缓存和接收缓存是否为空, 如果为空则设置默认值大小为131072, 默认是65535
         if (null == System
                 .getProperty(NettySystemConfig.COM_ROCKETMQ_REMOTING_SOCKET_SNDBUF_SIZE)) {
             NettySystemConfig.socketSndbufSize = 131072;
@@ -128,7 +128,7 @@ public class BrokerStartup {
                 messageStoreConfig.setAccessMessageInMemoryMaxRatio(ratio);
             }
             /**
-             * 如果启动命令行参数包含 -c 参数，会读取配置到Propertis中, 让后通过MixAll.properties2Object(),
+             * 如果启动命令行参数包含 -c 参数，会读取配置到Properties中, 让后通过MixAll.properties2Object(),
              * 将读取的配置文件信息存入brokerConfig, nettyServerConfig, nettyClientConfig, messageStoreConfig对应的实体类中，
              * 最后将配置文件路径信息保存到BrokerPathConfigHelper中brokerConfigPath变量中
              */
@@ -185,14 +185,13 @@ public class BrokerStartup {
                         System.out.printf("Slave's brokerId must be > 0");
                         System.exit(-3);
                     }
-
                     break;
                 default:
                     break;
             }
-
+            // 设置高可用服务端监听端口10912
             messageStoreConfig.setHaListenPort(nettyServerConfig.getListenPort() + 1);
-            //导入指定路径的logback_broker.xml文件
+            // 导入指定路径的logback_broker.xml文件
             LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
             JoranConfigurator configurator = new JoranConfigurator();
             configurator.setContext(lc);

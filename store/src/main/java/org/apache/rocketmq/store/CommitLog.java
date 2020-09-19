@@ -50,7 +50,8 @@ public class CommitLog {
     private final DefaultMessageStore defaultMessageStore;
     private final FlushCommitLogService flushCommitLogService;
 
-    //If TransientStorePool enabled, we must flush message to FileChannel at fixed periods
+    // If TransientStorePool enabled, we must flush message to FileChannel at fixed periods
+    // 如果启用了TransientStorePool，则必须在固定时间段将消息刷新到FileChannel
     private final FlushCommitLogService commitLogService;
 
     private final AppendMessageCallback appendMessageCallback;
@@ -709,18 +710,24 @@ public class CommitLog {
 
     public void handleHA(AppendMessageResult result, PutMessageResult putMessageResult,
                          MessageExt messageExt) {
+        // 若是主从同步
         if (BrokerRole.SYNC_MASTER == this.defaultMessageStore.getMessageStoreConfig()
                 .getBrokerRole()) {
             HAService service = this.defaultMessageStore.getHaService();
             if (messageExt.isWaitStoreMsgOK()) {
                 // Determine whether to wait
+                // 决定是否等待，如果Slave和Master之间offset差距超过设定值，则不再同步，返回SLAVE_NOT_AVAILABLE
                 if (service.isSlaveOK(result.getWroteOffset() + result.getWroteBytes())) {
+                    // 组装request
                     GroupCommitRequest request = new GroupCommitRequest(
                             result.getWroteOffset() + result.getWroteBytes());
                     service.putRequest(request);
+                    // 唤醒的是writeSocketService，他在等待CommitLog的追加
                     service.getWaitNotifyObject().wakeupAll();
+                    // 线程在request上wait
                     boolean flushOK = request.waitForFlush(
                             this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout());
+                    // 若flushOK为false则同步失败
                     if (!flushOK) {
                         log.error("do sync transfer other node, wait return, but failed, topic: "
                                 + messageExt.getTopic() + " tags: " + messageExt.getTags()

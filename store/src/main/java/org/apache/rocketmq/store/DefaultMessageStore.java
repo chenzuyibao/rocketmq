@@ -56,6 +56,7 @@ public class DefaultMessageStore implements MessageStore {
 
     private final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
 
+    // ConsumeQueue持久化服务
     private final FlushConsumeQueueService flushConsumeQueueService;
 
     private final CleanCommitLogService cleanCommitLogService;
@@ -70,8 +71,10 @@ public class DefaultMessageStore implements MessageStore {
 
     private final HAService haService;
 
+    // 定时消息持久化服务
     private final ScheduleMessageService scheduleMessageService;
 
+    // 服务端状态持久化服务
     private final StoreStatsService storeStatsService;
 
     private final TransientStorePool transientStorePool;
@@ -164,9 +167,11 @@ public class DefaultMessageStore implements MessageStore {
             }
 
             // load Commit Log
+            // 加载 commit log
             result = result && this.commitLog.load();
 
             // load Consume Queue
+            // 加载 Consumer Queue
             result = result && this.loadConsumeQueue();
 
             if (result) {
