@@ -108,7 +108,7 @@ public class HAService {
     // }
 
     public void start() throws Exception {
-        // 启动Master端的ServerSocketChannel等待连接
+        // 启动Broker端的HA服务ServerSocketChannel等待连接,Master、Slave都会启动
         this.acceptSocketService.beginAccept();
         // 启动线程循环监听 Selector 连接事件
         this.acceptSocketService.start();

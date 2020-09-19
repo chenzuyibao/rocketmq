@@ -17,8 +17,6 @@
 
 package org.apache.rocketmq.broker;
 
-import java.io.File;
-
 import org.apache.commons.lang3.time.DateUtils;
 import org.apache.rocketmq.common.BrokerConfig;
 import org.apache.rocketmq.common.MQVersion;
@@ -29,8 +27,9 @@ import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 import org.apache.rocketmq.store.config.FlushDiskType;
 import org.apache.rocketmq.store.config.MessageStoreConfig;
 import org.junit.After;
-import org.junit.Ignore;
 import org.junit.Test;
+
+import java.io.File;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,10 +38,10 @@ public class BrokerControllerTest {
     @Test
     public void testBrokerRestart() throws Exception {
         BrokerController brokerController = new BrokerController(
-            new BrokerConfig(),
-            new NettyServerConfig(),
-            new NettyClientConfig(),
-            new MessageStoreConfig());
+                new BrokerConfig(),
+                new NettyServerConfig(),
+                new NettyClientConfig(),
+                new MessageStoreConfig());
         assertThat(brokerController.initialize());
         brokerController.start();
         brokerController.shutdown();
@@ -52,7 +51,7 @@ public class BrokerControllerTest {
     public void destroy() {
         UtilAll.deleteFile(new File(new MessageStoreConfig().getStorePathRootDir()));
     }
-    
+
     public static void main(String[] args) throws Exception {
         // 设置版本号
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
@@ -63,14 +62,15 @@ public class BrokerControllerTest {
         final BrokerConfig brokerConfig = new BrokerConfig();
         brokerConfig.setBrokerName("broker-a");
         brokerConfig.setNamesrvAddr("127.0.0.1:9876");
+        brokerConfig.setBrokerId(1L);
         // MessageStoreConfig 配置
         final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
         messageStoreConfig.setDeleteWhen("04");
         messageStoreConfig.setFileReservedTime(48);
         messageStoreConfig.setFlushDiskType(FlushDiskType.ASYNC_FLUSH);
         messageStoreConfig.setDuplicationEnable(false);
+        messageStoreConfig.setBrokerRole("SLAVE");
 
-        //BrokerPathConfigHelper.setBrokerConfigPath("/Users/yunai/百度云同步盘/开发/Javascript/Story/incubator-rocketmq/conf/broker.conf");
         // 创建 BrokerController 对象，并启动
         BrokerController brokerController = new BrokerController(//
                 brokerConfig, //
