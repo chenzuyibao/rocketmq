@@ -1178,8 +1178,7 @@ public class CommitLog {
                         // 有可能一条消息在MappedFile末尾插入不下，会插入下个MappedFile，故循环两次
                         boolean flushOK = false;
                         for (int i = 0; i < 2 && !flushOK; i++) {
-                            flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req
-                                    .getNextOffset();
+                            flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
                             if (!flushOK) {
                                 CommitLog.this.mappedFileQueue.flush(0);
                             }

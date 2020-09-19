@@ -130,9 +130,8 @@ public class SlaveSynchronize {
         String masterAddrBak = this.masterAddr;
         if (masterAddrBak != null) {
             try {
-                SubscriptionGroupWrapper subscriptionWrapper =
-                        this.brokerController.getBrokerOuterAPI()
-                                .getAllSubscriptionGroupConfig(masterAddrBak);
+                SubscriptionGroupWrapper subscriptionWrapper = this.brokerController.getBrokerOuterAPI()
+                        .getAllSubscriptionGroupConfig(masterAddrBak);
 
                 if (!this.brokerController.getSubscriptionGroupManager().getDataVersion()
                         .equals(subscriptionWrapper.getDataVersion())) {

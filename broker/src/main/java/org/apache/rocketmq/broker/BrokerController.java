@@ -410,7 +410,7 @@ public class BrokerController {
                     }
                 }, 1000 * 10, 1000 * 60, TimeUnit.MILLISECONDS);
             }
-            //filewatchservice,4.3.0以上支持
+            //fileWatchService,4.3.0以上支持
             if (TlsSystemConfig.tlsMode != TlsMode.DISABLED) {
                 // Register a listener to reload SslContext
                 try {
@@ -807,7 +807,7 @@ public class BrokerController {
     }
 
     public void start() throws Exception {
-        // 启动持久化服务端
+        // 启动持久化服务端，启动HAService，用于处理主从CommitLog同步和心跳
         if (this.messageStore != null) {
             this.messageStore.start();
         }

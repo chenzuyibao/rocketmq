@@ -310,6 +310,7 @@ public class HAConnection {
                         this.byteBufferHeader.putInt(size);
                         this.byteBufferHeader.flip();
 
+                        // 传输数据
                         this.lastWriteOver = this.transferData();
                     } else {
 
