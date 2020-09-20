@@ -650,7 +650,7 @@ public class CommitLog {
                     "[NOTIFYME]putMessage in lock cost time(ms)={}, bodyLength={} AppendMessageResult={}",
                     eclipseTimeInLock, msg.getBody().length, result);
         }
-        //未知
+
         if (null != unlockMappedFile
                 && this.defaultMessageStore.getMessageStoreConfig().isWarmMapedFileEnable()) {
             this.defaultMessageStore.unlockMappedFile(unlockMappedFile);

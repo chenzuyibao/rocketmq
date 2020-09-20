@@ -1704,6 +1704,7 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    //构建ConsumeQueue和Index
     class ReputMessageService extends ServiceThread {
 
         private volatile long reputFromOffset = 0;
