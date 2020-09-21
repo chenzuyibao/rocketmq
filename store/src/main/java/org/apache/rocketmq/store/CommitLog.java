@@ -678,7 +678,7 @@ public class CommitLog {
                 .getFlushDiskType()) {
             // 同步刷盘线程
             final GroupCommitService service = (GroupCommitService) this.flushCommitLogService;
-            // 默认为true
+            // 默认为true，客户端是否等待刷盘成功
             if (messageExt.isWaitStoreMsgOK()) {
                 GroupCommitRequest request = new GroupCommitRequest(
                         result.getWroteOffset() + result.getWroteBytes());
@@ -693,6 +693,7 @@ public class CommitLog {
                     putMessageResult.setPutMessageStatus(PutMessageStatus.FLUSH_DISK_TIMEOUT);
                 }
             } else {
+                // 变为异步刷盘
                 service.wakeup();
             }
         }
@@ -1175,7 +1176,7 @@ public class CommitLog {
                     for (GroupCommitRequest req : this.requestsRead) {
                         // There may be a message in the next file, so a maximum of
                         // two times the flush
-                        // 有可能一条消息在MappedFile末尾插入不下，会插入下个MappedFile，故循环两次
+                        // 有两个MappedFile，最多需要刷两次
                         boolean flushOK = false;
                         for (int i = 0; i < 2 && !flushOK; i++) {
                             flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
@@ -1183,7 +1184,7 @@ public class CommitLog {
                                 CommitLog.this.mappedFileQueue.flush(0);
                             }
                         }
-                        //新增该条语句，注意=========为自主修改，安装时需打包更新===============
+                        //新增该条语句
                         flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
                         //唤醒等待请求
                         req.wakeupCustomer(flushOK);
