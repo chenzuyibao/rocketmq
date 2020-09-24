@@ -148,8 +148,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     this.defaultMQProducer.changeInstanceNameToPID();
                 }
                 //初始化mQClientFactory为MQClientInstance，并将该实例加入factoryTable
+                // 每个Producer生产者实例都表示一个MQClientInstance
                 this.mQClientFactory = MQClientManager.getInstance().getAndCreateMQClientInstance(this.defaultMQProducer, rpcHook);
-                //将producer注册到MQClientInstance.producerTbale
+                //将producer注册到MQClientInstance.producerTable
                 boolean registerOK = mQClientFactory.registerProducer(this.defaultMQProducer.getProducerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -502,7 +503,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         TopicPublishInfo topicPublishInfo = this.tryToFindTopicPublishInfo(msg.getTopic());
         if (topicPublishInfo != null && topicPublishInfo.ok()) {
             boolean callTimeout = false;
-            MessageQueue mq = null;// 最后选择消息要发送到的队列
+            MessageQueue mq = null;// 要发送到的队列
             Exception exception = null;
             SendResult sendResult = null;// 最后一次发送结果
             int timesTotal = communicationMode == CommunicationMode.SYNC ? 1 + this.defaultMQProducer.getRetryTimesWhenSendFailed() : 1;// 同步多次调用，默认失败可再重试两次，也就是可发送三次。异步/oneway只调用一次
@@ -510,7 +511,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             String[] brokersSent = new String[timesTotal];// 存储每次发送消息选择的broker名
             // 循环调用发送消息，直到成功
             for (; times < timesTotal; times++) {
-                String lastBrokerName = null == mq ? null : mq.getBrokerName();
+                String lastBrokerName = null == mq ? null : mq.getBrokerName(); // 上一次发送的BrokerName
                 MessageQueue mqSelected = this.selectOneMessageQueue(topicPublishInfo, lastBrokerName);// 选择消息要发送到的队列
                 if (mqSelected != null) {
                     mq = mqSelected;
@@ -1136,13 +1137,18 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                                                           final LocalTransactionExecuter localTransactionExecuter, final Object arg)
             throws MQClientException {
         TransactionListener transactionListener = getCheckListener();
+        // 两种使用方法：1.实现TransactionListener接口 2. 实现LocalTransactionExecuter和TransactionCheckListener接口
         if (null == localTransactionExecuter && null == transactionListener) {
             throw new MQClientException("tranExecutor is null", null);
         }
         Validators.checkMessage(msg, this.defaultMQProducer);
 
         SendResult sendResult = null;
+        // 标明是事务消息
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_TRANSACTION_PREPARED, "true");
+        // 设置PGROUP属性为生产者组ID(对于回查逻辑非常重要)
+        // 1. broker向生产者端发送回查请求时，通过PGROUP属性值来寻找Channel
+        // 2. 生产者端通过PGROUP属性值从producerTable中找生产者实例，用来执行查询本地事务状态逻辑
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_PRODUCER_GROUP, this.defaultMQProducer.getProducerGroup());
         try {
             sendResult = this.send(msg);
@@ -1155,6 +1161,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         switch (sendResult.getSendStatus()) {
             case SEND_OK: {
                 try {
+                    // 如果设置了transactionId，将它放入消息的properties中（目前没有用到），否则以UNIQ_KEY作为消息的transactionId
                     if (sendResult.getTransactionId() != null) {
                         msg.putUserProperty("__transactionId__", sendResult.getTransactionId());
                     }
@@ -1193,6 +1200,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         }
 
         try {
+            // 发起END_TRANSACTION请求（如果本地事务状态为COMMIT_MESSAGE则为提交，如果为UNKNOW则什么也不做，如果为ROLLBACK_MESSAGE则为回滚）
             this.endTransaction(sendResult, localTransactionState, localException);
         } catch (Exception e) {
             log.warn("local transaction execute " + localTransactionState + ", but end broker transaction failed", e);

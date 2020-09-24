@@ -53,34 +53,45 @@ public class BrokerControllerTest {
     }
 
     public static void main(String[] args) throws Exception {
+        Thread thread = new Thread(() -> {
+            try {
+                start(10911, 0L, "ASYNC_MASTER", "broker-a", "127.0.0.1:9876", "主机MASTER");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+        thread.start();
+    }
+
+    public static void start(int port, Long brokerId, String brokerRole, String brokerName, String namesrv, String msg) throws Exception {
         // 设置版本号
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
         // NettyServerConfig 配置
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
-        nettyServerConfig.setListenPort(10911);
+        nettyServerConfig.setListenPort(port);
         // BrokerConfig 配置
         final BrokerConfig brokerConfig = new BrokerConfig();
-        brokerConfig.setBrokerName("broker-a");
-        brokerConfig.setNamesrvAddr("127.0.0.1:9876");
-        brokerConfig.setBrokerId(1L);
+        brokerConfig.setBrokerName(brokerName);
+        brokerConfig.setNamesrvAddr(namesrv);
+        brokerConfig.setBrokerId(brokerId);
         // MessageStoreConfig 配置
         final MessageStoreConfig messageStoreConfig = new MessageStoreConfig();
         messageStoreConfig.setDeleteWhen("04");
         messageStoreConfig.setFileReservedTime(48);
         messageStoreConfig.setFlushDiskType(FlushDiskType.ASYNC_FLUSH);
         messageStoreConfig.setDuplicationEnable(false);
-        messageStoreConfig.setBrokerRole("SLAVE");
+        messageStoreConfig.setBrokerRole(brokerRole);
 
         // 创建 BrokerController 对象，并启动
         BrokerController brokerController = new BrokerController(//
-                brokerConfig, //
-                nettyServerConfig, //
-                new NettyClientConfig(), //
+                brokerConfig,
+                nettyServerConfig,
+                new NettyClientConfig(),
                 messageStoreConfig);
         brokerController.initialize();
         brokerController.start();
         // 睡眠
-        System.out.println("Broker已启动");
+        System.out.println(msg + " -> Broker已启动");
         Thread.sleep(DateUtils.MILLIS_PER_DAY);
     }
 }
