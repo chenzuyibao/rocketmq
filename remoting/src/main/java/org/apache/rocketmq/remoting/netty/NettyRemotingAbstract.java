@@ -433,6 +433,7 @@ public abstract class NettyRemotingAbstract {
                                 final InvokeCallback invokeCallback)
             throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
         long beginStartTime = System.currentTimeMillis();
+        // 唯一请求ID，自增序列
         final int opaque = request.getOpaque();
         // 获取异步发送流控的许可
         boolean acquired = this.semaphoreAsync.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);

@@ -75,6 +75,7 @@ public class MQClientInstance {
     // 每个group对应的MQConsumerInner
     // consumer start的时候注册到这儿
     // 在每次发送message的时候从nameServer获取topicRouteData并更新每个consumer对应的信息
+    // 一个MQClientInstance可以消费多个group
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
     // 每个group对应的adminExtInner，在NameServer 启动的时候会注册DefaultMQAdminExt
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
@@ -229,6 +230,7 @@ public class MQClientInstance {
                     // 启动定时任务，更新Namesrv地址，清理掉线的Broker，定期持久化消费位点
                     this.startScheduledTask();
                     // Start pull service
+                    // 拉取消息线程开启
                     this.pullMessageService.start();
                     // Start rebalance service
                     this.rebalanceService.start();
@@ -854,6 +856,7 @@ public class MQClientInstance {
         }
 
         MQConsumerInner prev = this.consumerTable.putIfAbsent(group, consumer);
+        // 重复注册将警告，并不会生成新的实例，也就是instanceName相同共享一个实例
         if (prev != null) {
             log.warn("the consumer group[" + group + "] exist already.");
             return false;
