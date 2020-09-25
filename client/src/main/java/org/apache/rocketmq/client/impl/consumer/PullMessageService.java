@@ -93,8 +93,8 @@ public class PullMessageService extends ServiceThread {
 
         while (!this.isStopped()) {
             try {
-                // 单线程执行，该阻塞队列只是作为从Broker端拉取消息的容器，没有业务执行
-                // 从pullRequestQueue获取PullRequest，只要pullRequestQueue有消息就进行获取放入到对应的实例进行消费
+                // 单线程执行
+                // 该线程作用：阻塞队列获取PullRequest,通过Netty远程异步请求消息，将消息放入线程池（consumeExecutor）中执行，然后再放入阻塞队列，等待再次调用，一直循环
                 PullRequest pullRequest = this.pullRequestQueue.take();
                 // 消费消息
                 this.pullMessage(pullRequest);
