@@ -233,6 +233,7 @@ public class MQClientInstance {
                     // 拉取消息线程开启
                     this.pullMessageService.start();
                     // Start rebalance service
+                    // 启动负载均衡线程
                     this.rebalanceService.start();
                     // Start push service
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
@@ -608,6 +609,7 @@ public class MQClientInstance {
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
                     if (topicRouteData != null) {
+                        // 判断新旧 TOPIC 路由是否被改变
                         TopicRouteData old = this.topicRouteTable.get(topic);
                         boolean changed = topicRouteDataIsChange(old, topicRouteData);
                         if (!changed) {
@@ -624,6 +626,7 @@ public class MQClientInstance {
                             }
 
                             // Update Pub info
+                            // 更新发布信息，对生产者影响
                             {
                                 TopicPublishInfo publishInfo = topicRouteData2TopicPublishInfo(topic, topicRouteData);
                                 publishInfo.setHaveTopicRouterInfo(true);
@@ -638,6 +641,7 @@ public class MQClientInstance {
                             }
 
                             // Update sub info
+                            // 更新订阅信息，对消费者影响
                             {
                                 Set<MessageQueue> subscribeInfo = topicRouteData2TopicSubscribeInfo(topic, topicRouteData);
                                 Iterator<Entry<String, MQConsumerInner>> it = this.consumerTable.entrySet().iterator();
@@ -1069,6 +1073,7 @@ public class MQClientInstance {
     }
 
     public List<String> findConsumerIdList(final String topic, final String group) {
+        // 获取Broker地址
         String brokerAddr = this.findBrokerAddrByTopic(topic);
         if (null == brokerAddr) {
             this.updateTopicRouteInfoFromNameServer(topic);
@@ -1077,6 +1082,7 @@ public class MQClientInstance {
 
         if (null != brokerAddr) {
             try {
+                // 从该Broker获取所有的消费者信息
                 return this.mQClientAPIImpl.getConsumerIdListByGroup(brokerAddr, group, 3000);
             } catch (Exception e) {
                 log.warn("getConsumerIdListByGroup exception, " + brokerAddr + " " + group, e);

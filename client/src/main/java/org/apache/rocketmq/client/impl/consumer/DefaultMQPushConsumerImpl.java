@@ -95,6 +95,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     private boolean consumeOrderly = false;
     private MessageListener messageListenerInner;
     private OffsetStore offsetStore;
+    // 消费消息服务，用于消费
     private ConsumeMessageService consumeMessageService;
     private long queueFlowControlTimes = 0;
     private long queueMaxSpanFlowControlTimes = 0;
@@ -645,9 +646,12 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 break;
         }
 
+        // 更新TOPIC订阅信息
         this.updateTopicSubscribeInfoWhenSubscriptionChanged();
         this.mQClientFactory.checkClientInBroker();
+        // 发送心跳到所有Broker
         this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
+        // 立即执行一次rebalance，保证新创建的消费客户端进行负载均衡分配队列
         this.mQClientFactory.rebalanceImmediately();
     }
 

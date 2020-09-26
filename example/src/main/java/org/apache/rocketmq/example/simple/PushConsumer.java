@@ -17,9 +17,9 @@
 package org.apache.rocketmq.example.simple;
 
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
-import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
-import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
-import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
+import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyContext;
+import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyStatus;
+import org.apache.rocketmq.client.consumer.listener.MessageListenerOrderly;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
 import org.apache.rocketmq.common.message.MessageExt;
@@ -41,13 +41,19 @@ public class PushConsumer {
         consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
         //wrong time format 2017_0422_221800
         // consumer.setConsumeTimestamp("20181109221800");
-        consumer.registerMessageListener(new MessageListenerConcurrently() {
+        consumer.registerMessageListener(new MessageListenerOrderly() {
 
             @Override
+            public ConsumeOrderlyStatus consumeMessage(List<MessageExt> msgs, ConsumeOrderlyContext context) {
+                System.out.printf("%s %s Receive New Messages: %s %n", consumerName, Thread.currentThread().getName(), msgs);
+                return ConsumeOrderlyStatus.SUCCESS;
+            }
+
+            /*@Override
             public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
                 System.out.printf("%s %s Receive New Messages: %s %n", consumerName, Thread.currentThread().getName(), msgs);
                 return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
-            }
+            }*/
 
         });
         consumer.start();
